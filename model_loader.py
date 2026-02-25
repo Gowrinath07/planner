@@ -7,7 +7,7 @@ import pickle
 import logging
 import numpy as np
 import pandas as pd
-import streamlit as st
+
 
 logger = logging.getLogger(__name__)
 
@@ -149,13 +149,7 @@ class ModelLoader:
         self._model_dir = model_dir
         self._load_all()
         if self._warnings:
-            with st.sidebar:
-                st.warning(
-                    "⚠️ **Demo mode** — some model files were not found.\n"
-                    "Stub predictions are being used:\n"
-                    + "\n".join(f"- `{w}`" for w in self._warnings)
-                )
-
+           print("⚠ Demo mode — some model files missing")
     def _load_all(self):
         for key, filename in self.MODEL_FILES.items():
             path = os.path.join(self._model_dir, filename)
