@@ -1,18 +1,25 @@
 import gradio as gr
 import numpy as np
 
+from ui_components import CUSTOM_CSS, render_header
 from model_loader import ModelLoader
 from health_metrics import HealthMetrics
 from planner import WorkoutPlanner, DietPlanner
 
+# Load models once
 models = ModelLoader()
 
+
+# ─────────────────────────────────────────────
+# Core Logic
+# ─────────────────────────────────────────────
 def compute_plan(
     age, gender, height, weight,
     activity_level, fitness_goal,
     dietary_preference, cultural_food,
     budget, equipment, free_text
 ):
+
     user_data = {
         "age": age,
         "gender": gender,
@@ -27,18 +34,18 @@ def compute_plan(
         "free_text_prefs": free_text
     }
 
-    # Health metrics
+    # ── Health Metrics ───────────────────────
     metrics = HealthMetrics(user_data)
     bmi = round(metrics.bmi(), 2)
     bmr = round(metrics.bmr(), 1)
     tdee = round(metrics.tdee(), 1)
 
-    # Cluster
-    cluster_features = np.array([[age, bmi, 0,0,0,0,0]])
+    # ── Fitness Cluster ──────────────────────
+    cluster_features = np.array([[age, bmi, 0, 0, 0, 0, 0]])
     scaled = models.scale(cluster_features)
     cluster = models.predict_cluster(scaled)
 
-    # Calories
+    # ── Calorie Prediction ───────────────────
     calorie_features = models.preprocess_calories({
         "age": age,
         "gender": gender,
@@ -50,8 +57,10 @@ def compute_plan(
         "bmr": bmr,
         "tdee": tdee,
     })
+
     predicted_calories = models.predict_calories(calorie_features)
 
+    # ── Workout Plan ─────────────────────────
     workout_plan = WorkoutPlanner.generate(
         fitness_level="Intermediate",
         fitness_goal=fitness_goal,
@@ -59,37 +68,46 @@ def compute_plan(
         notes=[]
     )
 
+    # ── Diet Plan ────────────────────────────
     diet_plan = DietPlanner.generate(
         daily_calories=predicted_calories,
-        macros={"protein_pct":30,"carbs_pct":40,"fat_pct":30},
+        macros={"protein_pct": 30, "carbs_pct": 40, "fat_pct": 30},
         dietary_preference=dietary_preference,
         cultural_food_habits=cultural_food,
         budget_usd=budget,
         notes=[]
     )
 
+    # ── Output Formatting ────────────────────
+    workout_days = ", ".join([d["day"] for d in workout_plan])
+
     return f"""
-    ## 📊 Health Metrics
-    BMI: {bmi}
-    BMR: {bmr}
-    TDEE: {tdee}
-    Predicted Calories: {round(predicted_calories)}
+## 📊 Health Metrics
+**BMI:** {bmi}  
+**BMR:** {bmr} kcal  
+**TDEE:** {tdee} kcal  
+**Predicted Calories:** {round(predicted_calories)} kcal  
 
-    ## 🏋 Workout Days:
-    {', '.join([d['day'] for d in workout_plan])}
+---
 
-    ## 🥗 Diet Plan Generated Successfully
-    """
+## 🏋 Workout Plan
+Days Scheduled:  
+{workout_days}
 
-custom_css = """
-body { background-color: #FAF7F2; font-family: 'Epilogue', sans-serif; }
-h1 { font-family: 'Playfair Display', serif; }
+---
+
+## 🥗 Diet Plan
+Personalized meal plan generated successfully.
 """
 
-with gr.Blocks(css=custom_css, title="AI Fitness Planner") as app:
 
-    gr.Markdown("# ⚡ AI Fitness Planner")
-    gr.Markdown("Machine learning meets nutrition science — built around you.")
+# ─────────────────────────────────────────────
+# Gradio UI
+# ─────────────────────────────────────────────
+with gr.Blocks(css=CUSTOM_CSS, title="AI Fitness Planner") as app:
+
+    # Header from ui_components.py
+    render_header()
 
     with gr.Row():
         age = gr.Slider(16, 80, value=28, label="Age")
@@ -98,33 +116,36 @@ with gr.Blocks(css=custom_css, title="AI Fitness Planner") as app:
         weight = gr.Number(value=70, label="Weight (kg)")
 
     activity = gr.Dropdown(
-        ["Sedentary","Lightly Active","Moderately Active","Very Active","Extremely Active"],
+        ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Extremely Active"],
         label="Activity Level"
     )
 
     fitness_goal = gr.Dropdown(
-        ["Weight Loss","Muscle Gain","Endurance","General Fitness","Maintenance"],
+        ["Weight Loss", "Muscle Gain", "Endurance", "General Fitness", "Maintenance"],
         label="Fitness Goal"
     )
 
     dietary_preference = gr.Dropdown(
-        ["Non-Vegetarian","Vegetarian","Vegan","Pescatarian","Keto","Paleo"],
+        ["Non-Vegetarian", "Vegetarian", "Vegan", "Pescatarian", "Keto", "Paleo"],
         label="Dietary Preference"
     )
 
     cultural_food = gr.Dropdown(
-        ["South Asian","Western","Middle Eastern","East Asian"],
+        ["South Asian", "Western", "Middle Eastern", "East Asian"],
         label="Cultural Food Habits"
     )
 
     budget = gr.Slider(2, 50, value=10, label="Daily Budget ($)")
 
     equipment = gr.CheckboxGroup(
-        ["Bodyweight","Dumbbells","Barbell","Resistance Bands","Machines"],
+        ["Bodyweight", "Dumbbells", "Barbell", "Resistance Bands", "Machines"],
         label="Available Equipment"
     )
 
-    free_text = gr.Textbox(label="Preferences / Injuries", lines=2)
+    free_text = gr.Textbox(
+        label="Preferences / Injuries",
+        lines=2
+    )
 
     output = gr.Markdown()
 
@@ -141,4 +162,8 @@ with gr.Blocks(css=custom_css, title="AI Fitness Planner") as app:
         outputs=output
     )
 
+
+# ─────────────────────────────────────────────
+# Launch App
+# ─────────────────────────────────────────────
 app.launch()
